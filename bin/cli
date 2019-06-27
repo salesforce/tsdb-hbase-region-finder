@@ -1,0 +1,38 @@
+'''
+  Copyright (c) 2019, salesforce.com, inc.
+  All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause
+  For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+
+'''
+
+
+#!/usr/bin/env python
+import argparse
+from regionfinder import Config, TSDBClient, HBaseUIClient, RegionFinderError
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Outputs CSV-formatted region servers and names of all matching timeseries (delimited by the | character )')
+    parser.add_argument("expression", type=str,
+                        help="The TSDB metric name")
+    parser.add_argument("-t", "--time", default='1h-ago',
+                        help="TSDB relative time-string or absolute epoch time to use in rowkey.\nSee http://opentsdb.net/docs/build/html/user_guide/query/dates.html")
+    parser.add_argument("-c", "--config", default='',
+                        help="Path to config yaml")
+    args = parser.parse_args()
+    config = Config(args.config)
+
+    try:
+        tsdb_client = TSDBClient(config.tsdb_url, config.tsdb_metric_width, config.tsdb_salt_width)
+        rowkeys = tsdb_client.get_rowkeys_of(args.expression, args.time)
+
+        hbase_ui_client = HBaseUIClient(config.hbase_url, config.hbase_table_name, config.cache_dir, autorefresh=False)
+        rs_infos = set()
+        for rowkey in rowkeys:
+            rs_infos.add(hbase_ui_client.get_rs_of_rowkey(rowkey))
+
+        print('RegionServer|RegionName')
+        for rs_info in rs_infos:
+            print('|'.join(rs_info))
+    except RegionFinderError as err:
+        print(str(err))

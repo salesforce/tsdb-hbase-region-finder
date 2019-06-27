@@ -1,0 +1,124 @@
+'''
+  Copyright (c) 2019, salesforce.com, inc.
+  All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause
+  For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+
+'''
+
+
+#!/usr/bin/env python
+import argparse
+import logging
+from regionfinder import Config, TSDBClient, HBaseUIClient, RegionFinderError
+try:
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+except ImportError:
+    from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
+from regionfinder.util import logger, stream_logger, binary_type
+
+stream_logger.setLevel(logging.INFO)
+
+HOST_NAME = '0.0.0.0'
+clients = None
+server_class = HTTPServer
+
+class ExpressionHandler(BaseHTTPRequestHandler):
+    RESP_PREFIX = '''
+    <html style="width: 100%;">
+        <head><title>region-finder</title></head>
+        <body style="with: 100%; font-family: Helvetica, sans-serif;">
+            <table style="border-collapse: collapse; margin: 40px auto 0;">
+            <tr><th>Region Server</th><th>Region name</th></tr>
+    '''
+    RESP_SUFFIX = '</table></body></html>'
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
+    def do_GET(self):
+        if self.path.startswith('/region'):
+            querystring= urlparse(self.path).query
+            query_map = dict(qc.split('=') for qc in querystring.split('&'))
+            if 'q' in query_map:
+                self.respond_ok(query_map)
+            else:
+                self.respond_badobject('Expected a query string like ?q=<metric name>')
+        else:
+            self.respond_notfound()
+
+    def respond_ok(self, query_map):
+        expression = query_map['q']
+        time = query_map.get('t', '1h-ago')
+        table_components = []
+        try:
+            rowkeys = clients.tsdb_client.get_rowkeys_of(expression, time)
+            rs_infos = set()
+            for rowkey in rowkeys:
+                rs_infos.add(hbase_ui_client.get_rs_of_rowkey(rowkey))
+            for rs_info in rs_infos:
+                table_components.append('<tr><td style="border: 1px solid black; padding: 15px; text-align: left;">{}</td><td style="border: 1px solid black; padding: 15px; text-align: left;">{}</td></tr>'.format(rs_info[0], rs_info[1]))
+        except RegionFinderError as err:
+            self.respond_badobject(str(err))
+        except Exception as err:
+            self.respond_badobject('Got an unexpected error:\n' + str(err))
+        else:
+            banner = '<h3 style="margin-top: 3em; text-align: center;">Unique regions for TSDB time of <span style="font-family: Courier New, Courier, monospace">{}</span> for uids of: <p style="with: 100%; font-family: Courier New, Courier, monospace">{}</p></h3>'.format(time, expression)
+            content = ''.join([self.RESP_PREFIX, banner] +  table_components + [self.RESP_SUFFIX])
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(binary_type(content))
+
+    def respond_badobject(self, message):
+        self.send_response(422)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(binary_type(message))
+
+    def respond_notfound(self):
+        self.send_response(404)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(binary_type('''<html style="width: 100%;">
+        <head><title>region-finder</title></head>
+        <body style="with: 100%; font-family: Helvetica, sans-serif;">
+        <div style="margin: 40px auto 0; width: 50%">
+        <h4>Route not found. Example API usage:</h4>
+        <ul><li><a href="/region?q=metricName&t=1h-ago">/region?q=metricName&t=1h-ago</a></li></ul></div>
+        </body></html>'''))
+
+
+# Dumb class I guess I have to make because BaseHTTPRequestHandler isn't supposed to have instance variables
+class ClientsWrapper:
+    def __init__(self, tsdb_client, hbase_ui_client):
+        self.tsdb_client = tsdb_client
+        self.hbase_ui_client = hbase_ui_client
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config", default='',
+                        help="path to config yaml")
+    parser.add_argument("-p", "--port", type=int, default=9000,
+                        help="path to config yaml")
+    args = parser.parse_args()
+    config = Config(args.config)
+    tsdb_client = TSDBClient(config.tsdb_url, config.tsdb_metric_width, config.tsdb_salt_width)
+    hbase_ui_client = HBaseUIClient(config.hbase_url, config.hbase_table_name, config.cache_dir)
+    clients = ClientsWrapper(tsdb_client, hbase_ui_client)
+
+    httpd = server_class((HOST_NAME, args.port), ExpressionHandler)
+    logger.info('Server started - {}:{}'.format(HOST_NAME, args.port))
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    if hbase_ui_client.active_timer:
+        hbase_ui_client.active_timer.cancel()
+    httpd.server_close()
+    logger.info('Server stopped - {}:{}'.format(HOST_NAME, args.port))
