@@ -30,7 +30,7 @@ python --version
 
 Clone the repository, create a Python virtualenv, and install local dependencies
 ```
-git clone https://git.soma.salesforce.com/ArgusMonitoring/region-finder.git
+git clone https://github.com/salesforce/tsdb-hbase-region-finder.git
 cd region-finder
 
 virtualenv venv
