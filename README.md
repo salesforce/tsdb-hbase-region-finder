@@ -31,7 +31,7 @@ python --version
 Clone the repository, create a Python virtualenv, and install local dependencies
 ```
 git clone https://github.com/salesforce/tsdb-hbase-region-finder.git
-cd region-finder
+cd tsdb-hbase-region-finder
 
 virtualenv venv
 source venv/bin/activate
