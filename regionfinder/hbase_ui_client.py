@@ -107,27 +107,44 @@ class HBaseUIClient:
         return region_server_hrefs
 
     def _get_region_ranges(self, url):
-        # URLs already have a trailing slash
-        resp = requests.get(url + 'rs-status')
+        urlObject = urlparse(url)
+        # newer version of the UI has the path in the href while the older one didn't
+        if urlObject.path != '/rs-status':
+            urlObject.path = '/rs-status';
+        logger.info('Retrieving info for {}'.format(urlObject.geturl()))
+        resp = requests.get(urlObject.geturl())
         soup = BeautifulSoup(resp.text, 'html.parser')
         rows = soup.select('div#tab_regionBaseInfo table tr')
         region_names = []
         for row in rows[1:]:
             tds = row.find_all('td')
-            if len(tds) != 3:
-                logger.warning('Row for {} did not have the expected 3 columns'.format(tds[0].string))
+            # 3 <td> per row indicates an older version of the UI where the "Region Name" format is
+            #   tableName,timestamp,region
+            if len(tds) == 3:
+                if tds[0].string.strip().startswith(self.table_name + ','):
+                    region_names.append([tds[0].string, tds[1].string, tds[2].string])
+                else:
+                    continue
+            # 4 <td> per row indicates a newer version of the UI where the "Region Name" format is
+            #   tableName,startKey,timestamp,region
+            elif len(tds) == 4:
+                full_name = tds[0].find('a').string.strip()
+                name_tokens = full_name.split(',')
+                if full_name.startswith(self.table_name + ','):
+                    name = name_tokens[0] + ',' + name_tokens[2]
+                    region_names.append([name, tds[1].string, tds[2].string])
+                else:
+                    continue
+            else:
+                logger.warning('Row for {} did not have the expected 3 or 4 columns'.format(tds[0].string))
                 continue
-            if tds[0].string.startswith(self.table_name + ','):
-                region_names.append([tds[0].string, tds[1].string, tds[2].string])
         return region_names
 
     def _create_rs_range_list(self):
         self.rs_ranges = []
         region_servers = self._get_region_servers()
         for region_server in region_servers:
-            logger.info('Retrieving info for {}'.format(region_server))
             region_ranges = self._get_region_ranges(region_server)
-
             for name, start, stop in region_ranges:
                 start_hexstring = '0'
                 stop_hexstring = 'Z'
