@@ -1,20 +1,15 @@
 # regionfinder
-Python 2/3 CLI tool that takes in a metric name or expression and returns the HBase RegionServer and Region where it is located.
+[June 2019] A Python 2/3 CLI tool that takes in a metric name or expression and returns the HBase RegionServer and Region where it is located. Has a dependency on the HMaster Info Web UI.
 
 Also available as a minimal webserver. 
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-
-
-- [Setup (Python 2 - Mac - Recommended)](#setup-python-2---mac---recommended)
-- [CLI usage](#cli-usage)
-- [CLI Examples](#cli-examples)
-- [Logging](#logging)
-- [Development](#development)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
+- [regionfinder](#regionfinder)
+  - [Setup (Python 2 - Mac - Recommended)](#setup-python-2---mac---recommended)
+  - [CLI usage](#cli-usage)
+  - [CLI Examples](#cli-examples)
+  - [Webserver usage](#webserver-usage)
+  - [Logging](#logging)
+  - [Development](#development)
 ## Setup (Python 2 - Mac - Recommended)
 Prerequisites: `python` version 2, `pip`, and `virtualenv`
 ```

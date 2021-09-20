@@ -177,9 +177,10 @@ class HBaseUIClient:
         self._flush_ranges_to_file()
         return self.rs_ranges
 
-    # The HBase UI displays keys as hex bytes alongside ASCII characters, eg. literally "\x00\x12M\xCEW" (M and W are ASCII here)
+    # The HBase UI displays keys as "\x"-prefixed hex bytes alongside ASCII characters (if the underlying hex byte can convert to an ASCII char),
+    #   eg. "\x00\x12M\xCEW" (M and W are converted ASCII here)
     # This method converts the key string into a full hexstring eg. "00124DCE57" for the above example
-    # Gotcha: this is not tolerant of an actual ASCII "\" followed by an ASCII "x", eg. "5C78" in hex, appearing in the HTML string
+    # FIXME: this is not tolerant of an actual ASCII "\" followed by an ASCII "x", eg. "5C78" in hex, appearing in the HTML string
     def _dirtystring_to_rowkey(self, dirty_string):
         return ''.join(map(self._char_to_hexbyte, list(dirty_string)))
 

@@ -93,7 +93,7 @@ class ExpressionHandler(BaseHTTPRequestHandler):
         </body></html>'''))
 
 
-# Dumb class I guess I have to make because BaseHTTPRequestHandler isn't supposed to have instance variables
+# Need this class because BaseHTTPRequestHandler apparently isn't supposed to have instance variables
 class ClientsWrapper:
     def __init__(self, tsdb_client, hbase_ui_client):
         self.tsdb_client = tsdb_client
